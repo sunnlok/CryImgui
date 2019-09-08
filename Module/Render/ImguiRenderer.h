@@ -1,5 +1,5 @@
 #pragma once;
-#include <CryRenderer/UserInterface.h>
+#include <CryRenderer/CustomPass.h>
 #include "Imgui/imgui.h"
 
 struct SRTDrawList
@@ -51,6 +51,8 @@ public:
 
 	void SetBlendMode(uint32 flags) { m_blendMode = flags; }
 private:
+	void UpdateRenderTarget();
+
 	uint32 m_blendMode = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
 	uint32 m_blendModeRT = GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
 
@@ -72,7 +74,10 @@ private:
 	SRTDrawData				m_rtDrawData;
 	std::vector<SRTDrawList> m_rtDrawLists;
 
-	std::unique_ptr<IDynTexture> m_pDynRT;
+	//std::unique_ptr<IDynTexture> m_pDynRT;
+
+
+	_smart_ptr<ITexture> m_pRenderTarget;
 	int m_texID = 0;
 
 	int							m_currentBufferOffset;

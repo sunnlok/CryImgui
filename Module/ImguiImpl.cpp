@@ -6,9 +6,12 @@
 
 #include <Imgui/imgui.h>
 #include "CryInput\IHardwareMouse.h"
-#include "CryRenderer/UserInterface.h"
+#include "CryRenderer/CustomPass.h"
 #include "Render/ImguiRenderer.h"
-#include "CryAction/IActionMapManager.h"
+//#include "CryAction/IActionMapManager.h"
+#include "CryGame/IGameFramework.h"
+#include "../CryAction/IActionMapManager.h"
+#include "CrySystem/ConsoleRegistration.h"
 
 static CImguiImpl* g_pThis = nullptr;
 static bool bCaptured = false;
@@ -39,8 +42,9 @@ CImguiImpl::CImguiImpl()
 	g_pThis = this;
 
 	CryLogAlways("[CryImgui] Initializing implementation...");
-	REGISTER_COMMAND("imgui_captureInput", ImguiCaptureMouse, 0, "Capture input for imgui");
-	REGISTER_CVAR2("imgui_showDemoWindow", &m_bShowDemoWindow, 0,0, "Show imgui demo window");
+
+	ConsoleRegistrationHelper::AddCommand("imgui_captureInput", ImguiCaptureMouse, 0, "Capture input for imgui");
+	ConsoleRegistrationHelper::Register("imgui_showDemoWindow", &m_bShowDemoWindow, 0,0, "Show imgui demo window");
 	
 	
 	gEnv->pSystem->GetISystemEventDispatcher()->RegisterListener(this, "imguiimpl");
@@ -110,12 +114,6 @@ void CImguiImpl::InitImgui()
 	keyMap[ImGuiKey_Y] = EKeyId::eKI_Y;       // for text edit CTRL+Y: redo
 	keyMap[ImGuiKey_Z] = EKeyId::eKI_Z;      // for text edit CTRL+Z: undo
 }
-	
-
-void CImguiImpl::OnPreSystemUpdate()
-{
-	
-}
 
 void CImguiImpl::Update()
 {
@@ -132,6 +130,17 @@ void CImguiImpl::Update()
 	io.DisplaySize = ImVec2((float)gEnv->pRenderer->GetWidth(), (float)gEnv->pRenderer->GetHeight());
 	if (bCaptured)
 		gEnv->pHardwareMouse->GetHardwareMouseClientPosition(&io.MousePos.x, &io.MousePos.y);
+
+
+	for (auto &entry : m_cachedInputEvents)
+		OnCachedInputEvent(entry);
+
+	m_cachedInputEvents.clear();
+	for (auto &entry : m_cachedMouseEvents)
+		OnCachedMouseEvent(entry.iX, entry.iY, entry.eHardwareMouseEvent, entry.wheelDelta);
+
+	m_cachedMouseEvents.clear();
+
 	ImGui::NewFrame();
 
 	bool show_test_window = m_bShowDemoWindow;
@@ -141,11 +150,6 @@ void CImguiImpl::Update()
 		ImGui::ShowDemoWindow(&show_test_window);
 	}
 	m_bShowDemoWindow = show_test_window;
-
-}
-
-void CImguiImpl::OnPreRenderUpdate()
-{
 
 }
 
@@ -176,7 +180,106 @@ CImguiImpl* CImguiImpl::Get()
 	return g_pThis;
 }
 
+void CImguiImpl::OnSystemEvent(ESystemEvent event, UINT_PTR wparam, UINT_PTR lparam)
+{
+	if (event == ESYSTEM_EVENT_EDITOR_GAME_MODE_CHANGED)
+	{
+		if (wparam)
+		{
+			gEnv->pHardwareMouse->IncrementCounter();
+		}
+		else
+		{
+			gEnv->pHardwareMouse->DecrementCounter();
+		}
+	}
+	else if (event == ESYSTEM_EVENT_CRYSYSTEM_INIT_DONE)
+	{
+		InitImgui();
+
+		InitImguiFontTexture();
+		gEnv->pHardwareMouse->AddListener(this);
+		gEnv->pInput->AddEventListener(this);
+		//gEnv->p3DEngine->SetPostEffectParam("Post3DRenderer_Active", 1.0f, true);
+	}
+}
+
 void CImguiImpl::OnHardwareMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardwareMouseEvent, int wheelDelta /*= 0*/)
+{
+	if (!bCaptured)
+		return;
+
+	m_cachedMouseEvents.emplace_back(iX, iY, eHardwareMouseEvent, wheelDelta);
+}
+
+bool CImguiImpl::OnInputEvent(const SInputEvent& event)
+{
+	//auto &io = ImGui::GetIO();
+
+	if (event.keyId == eKI_F9 && event.state == eIS_Pressed)
+		ImguiCaptureMouse(nullptr);
+
+	if (!bCaptured || event.keyId == eKI_SYS_Commit)
+		return false;
+	
+	m_cachedInputEvents.push_back(event);
+		
+	return true;
+}
+
+void CImguiImpl::OnCachedInputEvent(const SInputEvent &event)
+{
+	auto &io = ImGui::GetIO();
+
+	if (!bCaptured || event.keyId == eKI_SYS_Commit)
+		return;
+
+	bool isDown = false;
+
+	if (event.state & eIS_Down || event.state & eIS_Pressed)
+		isDown = true;
+	else if (event.state & eIS_Released)
+		isDown = false;
+
+	io.KeysDown[event.keyId] = isDown;
+
+	switch (event.keyId)
+	{
+	case eKI_RAlt:
+	case eKI_LAlt:
+		io.KeyAlt = isDown;
+		break;
+	case eKI_RCtrl:
+	case eKI_LCtrl:
+		io.KeyCtrl = isDown;
+		break;
+	case eKI_RShift:
+	case eKI_LShift:
+		io.KeyShift = isDown;
+		break;
+	default:
+		break;
+	}
+	if (event.deviceType == eIDT_Mouse || event.state == eIS_Released)
+		return;
+
+	auto keyName = event.keyName;
+	if (event.state == eIS_Pressed)
+	{
+		char key = keyName[0];
+		
+		if(event.keyId == eKI_Space)
+			key = ' ';
+		else if(event.keyId == eKI_Tab)
+			key = 9;
+		else if (strlen(keyName) != 1)
+			return;
+
+		io.AddInputCharacter(key);		
+	}
+}
+
+void CImguiImpl::OnCachedMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardwareMouseEvent, int wheelDelta /*= 0*/)
 {
 	if (!bCaptured)
 		return;
@@ -221,77 +324,6 @@ void CImguiImpl::OnHardwareMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardw
 	default:
 		break;
 	}
-}
-
-void CImguiImpl::OnSystemEvent(ESystemEvent event, UINT_PTR wparam, UINT_PTR lparam)
-{
-	if (event == ESYSTEM_EVENT_EDITOR_GAME_MODE_CHANGED)
-	{
-		if (wparam)
-		{
-			gEnv->pHardwareMouse->IncrementCounter();
-		}
-		else
-		{
-			gEnv->pHardwareMouse->DecrementCounter();
-		}
-	}
-	else if (event == ESYSTEM_EVENT_CRYSYSTEM_INIT_DONE)
-	{
-		InitImgui();
-
-		InitImguiFontTexture();
-		gEnv->pHardwareMouse->AddListener(this);
-		gEnv->pInput->AddEventListener(this);
-		//gEnv->p3DEngine->SetPostEffectParam("Post3DRenderer_Active", 1.0f, true);
-	}
-}
-
-bool CImguiImpl::OnInputEvent(const SInputEvent& event)
-{
-	auto &io = ImGui::GetIO();
-
-	if (!bCaptured || event.keyId == eKI_SYS_Commit)
-		return false;
-
-
-	bool isDown = false;
-
-	if (event.state == eIS_Down)
-		isDown = true;
-	else if (event.state == eIS_Released)
-		isDown = false;
-
-	io.KeysDown[event.keyId] = isDown;
-
-	switch (event.keyId)
-	{
-	case eKI_RAlt:
-	case eKI_LAlt:
-		io.KeyAlt = isDown;
-		break;
-	case eKI_RCtrl:
-	case eKI_LCtrl:
-		io.KeyCtrl = isDown;
-		break;
-	case eKI_RShift:
-	case eKI_LShift:
-		io.KeyShift = isDown;
-		break;	
-	default:
-		break;
-	}
-
-	auto keyName = event.keyName;
-	if (strlen(keyName) == 1)
-	{
-		char key = keyName[0];
-		io.AddInputCharacter(key);
-	}
-		
-
-	return true;
-
 }
 
 

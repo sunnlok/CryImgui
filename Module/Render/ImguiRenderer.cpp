@@ -37,11 +37,17 @@ bool CImguiRenderer::RT_Initalize(std::unique_ptr<ICustomRendererInstance> pInst
 		return false;
 	m_pImguiShader.Assign_NoAddRef(pShader);
 	gMvpConstant.second = m_pUIRenderer->RT_RegisterConstantName(gMvpConstant.first);
-	gLayoutID = m_pUIRenderer->RT_RegisterLayout(TArray<SInputElementDescription>(local_layout, 3));
+
+	TArray<SInputElementDescription> layoutView(local_layout, 3);
+#ifdef PRE_5_5
+	gLayoutID = m_pUIRenderer->RT_RegisterLayout(layoutView, pShader, gTechniqueCrc);
+#else
+	gLayoutID = m_pUIRenderer->RT_RegisterLayout(layoutView);
+#endif
 
 	//m_pMainRt = gEnv->pRenderer->EF_GetTextureByName("$SceneDiffuse");
 
-	SRTCreationParams creationParams = {
+	/*SRTCreationParams creationParams = {
 		"Imgui_Rt",
 		m_renderDimensions.x,
 		m_renderDimensions.y,
@@ -52,7 +58,9 @@ bool CImguiRenderer::RT_Initalize(std::unique_ptr<ICustomRendererInstance> pInst
 	};
 
 	auto pRT = m_pUIRenderer->CreateDynamicRenderTarget(creationParams);
-	m_pDynRT = std::move(pRT);
+	m_pDynRT = std::move(pRT);*/
+
+	UpdateRenderTarget();
 
 	Matrix44 mvp;
 	mathMatrixOrthoOffCenterLH(&mvp, 0, (float)m_renderDimensions.x, (float)m_renderDimensions.y, 0, 0, 1);
@@ -73,7 +81,7 @@ bool CImguiRenderer::RT_Initalize(std::unique_ptr<ICustomRendererInstance> pInst
 void CImguiRenderer::RT_Shutdown()
 {
 	m_bInitialized = false;
-	m_pDynRT.reset(nullptr);
+	m_pRenderTarget.reset(nullptr);
 
 	for (auto &bfrs : m_bufferHandles)
 	{
@@ -120,22 +128,42 @@ void CImguiRenderer::RenderImgui()
 
 	//Just draw to screen via auxgeom for now
 	//Use proper FulscreenStretch pass when implemented
+	if (!m_pRenderTarget.get())
+		return;
+#ifdef PRE_5_5
+	m_pUIRenderer->ExecuteRTCommand([id = m_pRenderTarget->GetTextureID()]()
+	{
+		int x, y, width, height;
+		gEnv->pRenderer->GetViewport(&x, &y, &width, &height);
+
+		float fWidth = (float)gEnv->pRenderer->GetOverlayWidth();// float)width;
+		float fHeight = (float)gEnv->pRenderer->GetOverlayHeight(); //(float)height;
+
+		fWidth /= (fWidth / 800);
+		fHeight /= (fHeight / 600);
+
+		gEnv->pRenderer->SetState(GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NODEPTHTEST);
+		gEnv->pRenderer->Push2dImage((float)x, (float)y, fWidth, fHeight, id, 0, 1.0f, 1.0f, 0);
+	}, true
+	);
+#else
+	//Just draw to screen via auxgeom for now
+	//Use proper FulscreenStretch pass when implemented
 	IRenderAuxImage::Draw2dImage(
 		0,
 		0,
 		(float)m_renderDimensions.x, (float)m_renderDimensions.y,
-		m_pDynRT->GetTextureID(), 0, 1.0f, 1.0f, 0);
+		m_pRenderTarget->GetTextureID(), 0, 1.0f, 1.0f, 0);
+#endif
+
 	if (auto pEnt = gEnv->pEntitySystem->FindEntityByName("testingentity"))
 	{
 		if (auto pMat = pEnt->GetSlotMaterial(0))
-			if (pMat->GetShaderItem().m_pShaderResources->GetTexture(0)->m_Sampler.m_pITex != m_pDynRT->GetTexture())
+			if (pMat->GetShaderItem().m_pShaderResources->GetTexture(0)->m_Sampler.m_pITex != m_pRenderTarget)
 			{
-				pMat->SetTexture(m_pDynRT->GetTextureID(), 0);
-				m_pLastRT = m_pDynRT->GetTexture();
-
+				pMat->SetTexture(m_pRenderTarget->GetTextureID(), 0);
+				m_pLastRT = m_pRenderTarget.get();
 			}
-
-			
 	}
 }
 
@@ -171,23 +199,42 @@ void CImguiRenderer::RT_Render()
 	m_blendModeRT = m_blendMode;
 }
 
+
+void CImguiRenderer::UpdateRenderTarget()
+{
+	SRTCreationParams creationParams = {
+		"Imgui_Rt",
+		m_renderDimensions.x,
+		m_renderDimensions.y,
+		Col_Transparent,
+		eTT_2D,
+		FT_NOMIPS | FT_DONT_STREAM | FT_USAGE_RENDERTARGET,
+		ETEX_Format::eTF_R8G8B8A8
+	};
+
+	m_pRenderTarget = m_pUIRenderer->CreateRenderTarget(creationParams);
+
+	m_pUIRenderer->ExecuteRTCommand([this]() { m_pUIRenderer->RT_ClearRenderTarget(m_pRenderTarget, Col_Transparent); });
+}
+
 bool CImguiRenderer::IsPassDataDirty()
 {
-	Matrix44 mvp;
-	mathMatrixOrthoOffCenterLH(&mvp, 0, (float)m_renderDimensions.x, (float)m_renderDimensions.y, 0, 0, 1);
-	mvp = mvp.GetTransposed();
-
-	memcpy(m_mvpConstant.m_mvpMat, mvp.GetData(), sizeof(Matrix44));
-
 	m_renderDimensions.x = (int)(m_rtDrawData.DisplaySize.x * m_rtDrawData.FramebufferScale.x);
 	m_renderDimensions.y = (int)(m_rtDrawData.DisplaySize.y * m_rtDrawData.FramebufferScale.y);
 
-	bool bWidthChanged = m_pDynRT->GetWidth() != m_renderDimensions.x;
-	bool bHeightChanged = m_pDynRT->GetHeight() != m_renderDimensions.y;
+	bool bWidthChanged = m_pRenderTarget->GetWidth() != m_renderDimensions.x;
+	bool bHeightChanged = m_pRenderTarget->GetHeight() != m_renderDimensions.y;
 
 	if (bHeightChanged || bWidthChanged)
 	{
-		m_pDynRT->Update(m_renderDimensions.x, m_renderDimensions.y);	
+		Matrix44 mvp;
+		mathMatrixOrthoOffCenterLH(&mvp, 0, (float)m_renderDimensions.x, (float)m_renderDimensions.y, 0, 0, 1);
+		mvp = mvp.GetTransposed();
+
+		memcpy(m_mvpConstant.m_mvpMat, mvp.GetData(), sizeof(Matrix44));
+
+		//m_pDynRT->Update(m_renderDimensions.x, m_renderDimensions.y);
+		UpdateRenderTarget();	
 	}
 
 	if (m_mvpConstantBuffer == INVALID_BUFFER)
@@ -195,7 +242,6 @@ bool CImguiRenderer::IsPassDataDirty()
 		m_mvpConstantBuffer = m_pUIRenderer->RT_CreateConstantBuffer(sizeof(SMvpMat));
 	}
 		
-
 	return (bConstantWasDirty = bWidthChanged || bHeightChanged);
 }
 
@@ -212,8 +258,6 @@ void CImguiRenderer::UpdateBuffers(const SRTDrawList &list, int meshIDX)
 
 void CImguiRenderer::DrawRenderCommand(const ImDrawCmd &cmd, int meshIDX)
 {
-	
-
 	SDrawParamsExternalBuffers drawParams;
 
 	drawParams.inputBuffer = m_bufferHandles[meshIDX].first;
@@ -262,11 +306,11 @@ void CImguiRenderer::DrawRenderCommand(const ImDrawCmd &cmd, int meshIDX)
 
 	SPrimitiveParams primitiveParams(shaderParams, constantParams, drawParams);
 
-	primitiveParams.stencilState =
-		STENC_FUNC(FSS_STENCFUNC_ALWAYS) |
-		STENCOP_FAIL(FSS_STENCOP_KEEP) |
-		STENCOP_ZFAIL(FSS_STENCOP_KEEP) |
-		STENCOP_PASS(FSS_STENCOP_KEEP);
+	/*primitiveParams.stencilState =
+		STENC_FUNC(STENCFUNC_ALWAYS) |
+		STENCOP_FAIL(STENCOP_KEEP) |
+		STENCOP_ZFAIL(STENCOP_KEEP) |
+		STENCOP_PASS(STENCOP_KEEP);*/
 
 	//primitiveParams.stencilRef = 1;
 	//primitiveParams.renderStateFlags = GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA; 
@@ -305,10 +349,11 @@ void CImguiRenderer::AdjustRenderMeshes()
 void CImguiRenderer::UpdatePassParams(SPassParams &params)
 {
 	params.viewPort = SRenderViewport(0, 0, m_renderDimensions.x, m_renderDimensions.y);
-	params.pColorTarget = m_pDynRT->GetTexture();
+	params.pColorTarget = m_pRenderTarget.get();
 	//passParams.pDepthsTarget = m_pDynStencilTarget->GetTexture();
 	params.clearMask = BIT(2);// (BIT(1) | );
 }
+
 
 void CImguiRenderer::DrawCommandList(const SRTDrawList &list, int meshIDX)
 {

@@ -8,6 +8,7 @@
 // Included only once per DLL module.
 #include <CryCore/Platform/platform_impl.inl>
 #include "ImguiImpl.h"
+#include "CrySystem/SystemInitParams.h"
 
 static CImguiImpl* g_pImguiImpl = nullptr;
 
@@ -25,13 +26,18 @@ CPlugin::~CPlugin()
 
 bool CPlugin::Initialize(SSystemGlobalEnvironment& env, const SSystemInitParams& initParams)
 {
+	if (initParams.bDedicatedServer)
+		return false;
+
 	gEnv->pSystem->GetISystemEventDispatcher()->RegisterListener(this,"CPlugin");
 
 	g_pImguiImpl = new CImguiImpl();
 
+#ifndef PRE_5_5
 	EnableUpdate(IEnginePlugin::EUpdateStep::MainUpdate, true);
-	EnableUpdate(IEnginePlugin::EUpdateStep::BeforeSystem, true);
-	EnableUpdate(IEnginePlugin::EUpdateStep::BeforeRender, true);
+#else
+	SetUpdateFlags(EPluginUpdateType::EUpdateType_Update);
+#endif
 	return true;
 }
 
@@ -42,21 +48,23 @@ CImguiImpl* CPlugin::GetImplementation()
 	return g_pImguiImpl;
 }
 
+#ifdef PRE_5_5
+void CPlugin::OnPluginUpdate(EPluginUpdateType updateType)
+{
+	if (gEnv->IsDedicated())
+		return;
 
+	g_pImguiImpl->Update();
+}
+#else
 void CPlugin::MainUpdate(float frameTime)
 {
+	if (gEnv->IsDedicated())
+		return;
+
 	g_pImguiImpl->Update();
 }	
-
-void CPlugin::UpdateBeforeSystem()
-{
-	g_pImguiImpl->OnPreSystemUpdate();
-}
-
-void CPlugin::UpdateBeforeRender()
-{
-	g_pImguiImpl->OnPreRenderUpdate();
-}
+#endif
 
 void CPlugin::OnSystemEvent(ESystemEvent event, UINT_PTR wparam, UINT_PTR lparam)
 {
@@ -87,5 +95,7 @@ void CPlugin::OnSystemEvent(ESystemEvent event, UINT_PTR wparam, UINT_PTR lparam
 	break;
 	}
 }
+
+
 
 CRYREGISTER_SINGLETON_CLASS(CPlugin)

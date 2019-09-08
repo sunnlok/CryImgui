@@ -56,5 +56,7 @@ CryEngineModule(CryImgui PCH "StdAfx.cpp" SOLUTION_FOLDER "CryPlugins")
 
 target_include_directories(${THIS_PROJECT} PRIVATE "${CRYENGINE_DIR}/Code/CryEngine/CryCommon" PUBLIC ../Interface)
 
+if (PLUGIN_LIVE++)
 include(${CRYENGINE_DIR}/Code/CryPlugins/Live++/Live++.cmake)
 LIVEPP_ENABLE_FOR_TARGET(${THIS_PROJECT})
+endif()

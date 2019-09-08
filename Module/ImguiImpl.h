@@ -15,9 +15,7 @@ public:
 
 	void InitImgui();
 
-	void OnPreSystemUpdate();
 	void Update();
-	void OnPreRenderUpdate();
 
 	static CImguiImpl* Get();
 
@@ -34,6 +32,11 @@ protected:
 	ITexture* GetFontTexture() { return m_pFontTexture; }
 
 private:
+	void OnCachedInputEvent(const SInputEvent &event);
+	void OnCachedMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardwareMouseEvent, int wheelDelta = 0);
+
+
+
 	int m_bShowDemoWindow = 0;
 
 	void InitImguiFontTexture();
@@ -43,4 +46,19 @@ private:
 	IMaterial*			m_pImageTest = nullptr;
 
 	std::unique_ptr<CImguiRenderer> m_pRenderer;
+
+	std::vector<SInputEvent> m_cachedInputEvents;
+
+	struct SHWMouseEvent
+	{
+		SHWMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardwareMouseEvent, int wheelDelta)
+			: iX(iX) , iY(iY), eHardwareMouseEvent(eHardwareMouseEvent), wheelDelta(wheelDelta) {}
+
+		int iX;
+		int iY;
+		EHARDWAREMOUSEEVENT eHardwareMouseEvent;
+		int wheelDelta;
+	};
+
+	std::vector<SHWMouseEvent> m_cachedMouseEvents;
 };
