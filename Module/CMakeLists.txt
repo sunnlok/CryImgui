@@ -26,8 +26,12 @@ add_sources("CryImgui_renderer.cpp"
 SOURCE_GROUP "Render"
 	"Render/ImguiRenderer.h"
 	"Render/ImguiRenderer.cpp"
+)
 
-
+add_sources("CryImgui_nodes.cpp"
+SOURCE_GROUP "Flowgraph"
+	"Flowgraph/ImguiNodes.cpp"
+	"Flowgraph/ImguiNodes.h"
 )
 
 add_sources("CryImgui_imgui.cpp"
@@ -44,6 +48,12 @@ SOURCE_GROUP "Imgui"
 	"Imgui/imstb_truetype.h"
 )
 
+add_sources("CryImgui_Widgets.cpp"
+SOURCE_GROUP "Widgets"
+	"Widgets/PerfMonitor.cpp"
+	"Widgets/PerfMonitor.h"
+)
+
 add_sources("NoUberFile"
 	SOURCE_GROUP "Root"
 		"StdAfx.cpp"
@@ -53,6 +63,9 @@ end_sources()
 
 
 CryEngineModule(CryImgui PCH "StdAfx.cpp" SOLUTION_FOLDER "CryPlugins")
+
+target_link_options(${THIS_PROJECT} PUBLIC /INCREMENTAL)
+target_compile_options(${THIS_PROJECT} PUBLIC /ZI)
 
 target_include_directories(${THIS_PROJECT} PRIVATE "${CRYENGINE_DIR}/Code/CryEngine/CryCommon" PUBLIC ../Interface)
 

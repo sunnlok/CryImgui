@@ -11,9 +11,9 @@ static uint32 gTechniqueCrc = CCrc32::ComputeLowercase_CompileTime("Imgui");
 
 static SInputElementDescription local_layout[] =
 {
-	{ "POSITION", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, (size_t)(&((ImDrawVert*)0)->pos), EInputSlotClassification::PER_VERTEX_DATA, 0 },
-	{ "TEXCOORD", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, (size_t)(&((ImDrawVert*)0)->uv),  EInputSlotClassification::PER_VERTEX_DATA, 0 },
-	{ "COLOR",    0, EInputElementFormat::R8G8B8A8_UNORM,		 0, (size_t)(&((ImDrawVert*)0)->col), EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	{ "POSITION", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, (uint32)(&((ImDrawVert*)0)->pos), EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	{ "TEXCOORD", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, (uint32)(&((ImDrawVert*)0)->uv),  EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	{ "COLOR",    0, EInputElementFormat::R8G8B8A8_UNORM,		 0, (uint32)(&((ImDrawVert*)0)->col), EInputSlotClassification::PER_VERTEX_DATA, 0 },
 };
 static int gLayoutID = 0;
 
@@ -23,7 +23,12 @@ CImguiRenderer::CImguiRenderer(ICustomPassRenderer* pUIRenderer, Vec2i rtDimensi
 	: m_pUIRenderer(pUIRenderer)
 	, m_renderDimensions(rtDimensions)
 {
-	m_pUIRenderer->CreateRendererInstance("ImgUI", this, sizeof(Vec4) * 4);
+	m_pUIRenderer->CreateRendererInstance("ImGui", this, sizeof(Vec4) * 4);
+
+	auto pShader = gEnv->pRenderer->EF_LoadShader("Imgui");
+	if (!pShader)
+		return;
+	m_pImguiShader.Assign_NoAddRef(pShader);
 }
 
 
@@ -32,10 +37,11 @@ bool CImguiRenderer::RT_Initalize(std::unique_ptr<ICustomRendererInstance> pInst
 	m_pInstance = std::move(pInstance);
 
 	CryLogAlways("Initializing imgui renderer");
-	auto pShader = gEnv->pRenderer->EF_LoadShader("Imgui");
-	if (!pShader)
-		return false;
-	m_pImguiShader.Assign_NoAddRef(pShader);
+	
+	
+	auto pShader = m_pImguiShader.get();
+	auto params = pShader->GetPublicParams();
+
 	gMvpConstant.second = m_pUIRenderer->RT_RegisterConstantName(gMvpConstant.first);
 
 	TArray<SInputElementDescription> layoutView(local_layout, 3);
@@ -175,8 +181,15 @@ void CImguiRenderer::RT_Render()
 
 	CryAutoCriticalSection lock(m_renderLock);
 	if (m_rtDrawLists.empty())
+	{
+		if (m_bClearOnEmpty)
+		{
+			m_pUIRenderer->RT_ClearRenderTarget(m_pRenderTarget.get(), Col_Transparent);
+			m_bClearOnEmpty = false;
+		}
 		return;
-
+	}
+		
 	bool rtUpdate = IsPassDataDirty();
 
 	SPassUpdateScope scope;
@@ -197,6 +210,7 @@ void CImguiRenderer::RT_Render()
 	}
 
 	m_blendModeRT = m_blendMode;
+	m_bClearOnEmpty = true;
 }
 
 

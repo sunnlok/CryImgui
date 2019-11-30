@@ -12,6 +12,7 @@
 #include "CryGame/IGameFramework.h"
 #include "../CryAction/IActionMapManager.h"
 #include "CrySystem/ConsoleRegistration.h"
+#include "Widgets/PerfMonitor.h"
 
 static CImguiImpl* g_pThis = nullptr;
 static bool bCaptured = false;
@@ -45,7 +46,7 @@ CImguiImpl::CImguiImpl()
 
 	ConsoleRegistrationHelper::AddCommand("imgui_captureInput", ImguiCaptureMouse, 0, "Capture input for imgui");
 	ConsoleRegistrationHelper::Register("imgui_showDemoWindow", &m_bShowDemoWindow, 0,0, "Show imgui demo window");
-	
+	ConsoleRegistrationHelper::Register("imgui_showPerfWidget", &m_showPerfWidget, 0, 0, "Show a small performance widget");
 	
 	gEnv->pSystem->GetISystemEventDispatcher()->RegisterListener(this, "imguiimpl");
 }
@@ -77,7 +78,7 @@ void CImguiImpl::InitImgui()
 {
 	ImGui::CreateContext();
 	ImGui::SetAllocatorFunctions(Allocate, Free);
-
+	
 	ImGuiIO& io = ImGui::GetIO();
 	//io.DisplaySize = ImVec2(300, 200);
 	Vec2i dimensions(gEnv->pRenderer->GetWidth(),gEnv->pRenderer->GetHeight());
@@ -113,11 +114,16 @@ void CImguiImpl::InitImgui()
 	keyMap[ImGuiKey_X] = EKeyId::eKI_X;       // for text edit CTRL+X: cut
 	keyMap[ImGuiKey_Y] = EKeyId::eKI_Y;       // for text edit CTRL+Y: redo
 	keyMap[ImGuiKey_Z] = EKeyId::eKI_Z;      // for text edit CTRL+Z: undo
+
+	m_pPerfMon = std::make_unique<Cry::Imgui::CPerformanceMonitor>();
 }
 
 void CImguiImpl::Update()
 {
+	CRY_PROFILE_FUNCTION(PROFILE_GAME);
+
 	static bool bFirstFrame = true;
+
 	if (bFirstFrame)
 	{
 		bFirstFrame = false;
@@ -140,7 +146,7 @@ void CImguiImpl::Update()
 		OnCachedMouseEvent(entry.iX, entry.iY, entry.eHardwareMouseEvent, entry.wheelDelta);
 
 	m_cachedMouseEvents.clear();
-
+	
 	ImGui::NewFrame();
 
 	bool show_test_window = m_bShowDemoWindow;
@@ -151,6 +157,8 @@ void CImguiImpl::Update()
 	}
 	m_bShowDemoWindow = show_test_window;
 
+	if (m_showPerfWidget)
+		m_pPerfMon->Update();
 }
 
 void CImguiImpl::InitImguiFontTexture()
@@ -326,5 +334,11 @@ void CImguiImpl::OnCachedMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardwar
 	}
 }
 
+void CImguiImpl::DrawPerformance()
+{
+	gEnv->pRenderer->GetGPUFrameTime();
+	SDebugFPSInfo info;
+	gEnv->p3DEngine->FillDebugFPSInfo(info);
+}
 
 

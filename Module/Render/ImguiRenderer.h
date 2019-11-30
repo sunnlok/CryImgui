@@ -91,4 +91,6 @@ private:
 	std::unique_ptr<Cry::Renderer::CustomPass::ICustomRendererInstance> m_pInstance;
 
 	uintptr_t m_mvpConstantBuffer = INVALID_BUFFER;
+
+	bool m_bClearOnEmpty;
 };

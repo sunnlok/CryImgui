@@ -3,6 +3,13 @@
 #include "CryInput\IInput.h"
 
 class CImguiRenderer;
+namespace Cry
+{
+	namespace Imgui
+	{
+		class CPerformanceMonitor;
+	}
+}
 
 class  CImguiImpl : IHardwareMouseEventListener, ISystemEventListener, IInputEventListener
 {
@@ -35,7 +42,7 @@ private:
 	void OnCachedInputEvent(const SInputEvent &event);
 	void OnCachedMouseEvent(int iX, int iY, EHARDWAREMOUSEEVENT eHardwareMouseEvent, int wheelDelta = 0);
 
-
+	void DrawPerformance();
 
 	int m_bShowDemoWindow = 0;
 
@@ -61,4 +68,8 @@ private:
 	};
 
 	std::vector<SHWMouseEvent> m_cachedMouseEvents;
+
+	std::unique_ptr<Cry::Imgui::CPerformanceMonitor> m_pPerfMon;
+
+	int m_showPerfWidget = 0;
 };
