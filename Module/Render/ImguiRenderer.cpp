@@ -11,9 +11,10 @@ static uint32 gTechniqueCrc = CCrc32::ComputeLowercase_CompileTime("Imgui");
 
 static SInputElementDescription local_layout[] =
 {
-	{ "POSITION", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, (uint32)(&((ImDrawVert*)0)->pos), EInputSlotClassification::PER_VERTEX_DATA, 0 },
-	{ "TEXCOORD", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, (uint32)(&((ImDrawVert*)0)->uv),  EInputSlotClassification::PER_VERTEX_DATA, 0 },
-	{ "COLOR",    0, EInputElementFormat::R8G8B8A8_UNORM,		 0, (uint32)(&((ImDrawVert*)0)->col), EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	{ "POSITION", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, 0, EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	{ "TEXCOORD", 0, EInputElementFormat::FORMAT_R32G32_FLOAT,   0, 8,  EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	{ "COLOR",    0, EInputElementFormat::R8G8B8A8_UNORM,		 0, 16, EInputSlotClassification::PER_VERTEX_DATA, 0 },
+	
 };
 static int gLayoutID = 0;
 
