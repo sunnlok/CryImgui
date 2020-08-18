@@ -58,7 +58,7 @@ void CImguiRenderer::RT_Initalize(const Cry::Renderer::Pipeline::StageCreationAr
 
 	TArray<Shader::SInputElementDescription> layoutView(local_layout, 3);
 #ifdef PRE_5_5
-	//gLayoutID = m_pUIRenderer->RT_RegisterLayout(layoutView, pShader, gTechniqueCrc);
+	gLayoutID = m_pUIRenderer->RT_RegisterLayout(layoutView, pShader, gTechniqueCrc);
 #else
 	gLayoutID = m_pPipeline->GetResourceProvider()->RegisterLayout(layoutView);
 #endif
@@ -86,7 +86,7 @@ void CImguiRenderer::RT_Initalize(const Cry::Renderer::Pipeline::StageCreationAr
 
 	memcpy(&m_mvpConstant, mvp.GetData(), sizeof(Matrix44));
 
-	Pass::SPassCreationParams passParams;
+	Pipeline::Pass::SPassCreationParams passParams;
 	passParams.passName = "ImguiPass";
 	passParams.passCrc = gPassCrc;
 	UpdatePassParams(passParams);
@@ -213,7 +213,7 @@ void CImguiRenderer::RT_Render(const Cry::Renderer::Pipeline::StageRenderArgumen
 	}
 	else
 	{
-		Pass::SPassParams passParams;
+		Pipeline::Pass::SPassParams passParams;
 		UpdatePassParams(passParams);
 		m_pPipeline->RT_BeginPass(*m_pImguiStage, m_imguiPassId, passParams);
 	}
@@ -287,7 +287,7 @@ void CImguiRenderer::UpdateBuffers(const SRTDrawList &list, int meshIDX)
 
 void CImguiRenderer::DrawRenderCommand(const ImDrawCmd &cmd, int meshIDX)
 {
-	Pass::SDrawParamsExternalBuffers drawParams;
+	Pipeline::Pass::SDrawParamsExternalBuffers drawParams;
 
 	drawParams.inputBuffer = m_bufferHandles[meshIDX].first;
 	drawParams.inputSize = cmd.ElemCount / 3;
@@ -301,18 +301,18 @@ void CImguiRenderer::DrawRenderCommand(const ImDrawCmd &cmd, int meshIDX)
 
 	drawParams.drawType = Shader::EDrawTypes::TriangleList;
 
-	Pass::SShaderParams shaderParams;
+	Pipeline::Pass::SShaderParams shaderParams;
 	shaderParams.pShader = m_pImguiShader;
 	shaderParams.techniqueLCCRC = gTechniqueCrc;
 
-	Pass::STextureParam texParam;
+	Pipeline::Pass::STextureParam texParam;
 	texParam.pTexture = cmd.TextureId;
 
-	Pass::SSamplerParam samplerParam;
+	Pipeline::Pass::SSamplerParam samplerParam;
 	samplerParam.handle = 12; // EDefaultSamplerStates::BilinearCompare ;
 
-	shaderParams.textures = TArray<Pass::STextureParam>(&texParam, 1);
-	shaderParams.samplerStates = TArray<Pass::SSamplerParam>(&samplerParam, 1);
+	shaderParams.textures = TArray<Pipeline::Pass::STextureParam>(&texParam, 1);
+	shaderParams.samplerStates = TArray<Pipeline::Pass::SSamplerParam>(&samplerParam, 1);
 
 	/*SNamedConstantArray mvpConstant;
 	mvpConstant.shaderClass = EShaderClass::Vertex;
@@ -323,17 +323,17 @@ void CImguiRenderer::DrawRenderCommand(const ImDrawCmd &cmd, int meshIDX)
 	constantParams.namedConstantArrays = TArray<SNamedConstantArray>(&mvpConstant, 1);*/
 
 
-	Pass::SConstantBuffer constantBuffer;
+	Pipeline::Pass::SConstantBuffer constantBuffer;
 	constantBuffer.externalBuffer = m_mvpConstantBuffer;
-	constantBuffer.newData = (uint8*)&m_mvpConstant;
-	constantBuffer.dataSize = sizeof(m_mvpConstant);
+	constantBuffer.value.newData = (uint8*)&m_mvpConstant;
+	constantBuffer.value.dataSize = sizeof(m_mvpConstant);
 	constantBuffer.stages = Shader::EShaderStages::ssAllWithoutCompute;
 	constantBuffer.slot = Shader::EConstantSlot::PerPass;
 
-	Pass::SInlineConstantParams constantParams;
-	constantParams.buffers = TArray<Pass::SConstantBuffer>(&constantBuffer, 1);
+	Pipeline::Pass::SInlineConstantParams constantParams;
+	constantParams.buffers = TArray<Pipeline::Pass::SConstantBuffer>(&constantBuffer, 1);
 
-	Pass::SPrimitiveParams primitiveParams(shaderParams, constantParams, drawParams);
+	Pipeline::Pass::SPrimitiveParams primitiveParams(shaderParams, constantParams, drawParams);
 
 	/*primitiveParams.stencilState =
 		STENC_FUNC(STENCFUNC_ALWAYS) |
@@ -375,7 +375,7 @@ void CImguiRenderer::AdjustRenderMeshes()
 	}
 }
 
-void CImguiRenderer::UpdatePassParams(Pass::SPassParams &params)
+void CImguiRenderer::UpdatePassParams(Pipeline::Pass::SPassParams &params)
 {
 	params.viewPort = SRenderViewport(0, 0, m_renderDimensions.x, m_renderDimensions.y);
 	params.pColorTarget = m_pRenderTarget.get();
