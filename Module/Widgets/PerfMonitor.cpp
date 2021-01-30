@@ -33,7 +33,7 @@ void Cry::Imgui::CPerformanceMonitor::Draw()
 	ImGui::SetNextWindowPos({ 0,0 });
 	ImGui::Begin("PerfMon", nullptr, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);
 
-	float avaragedFPS = std::accumulate(m_fps.begin(), m_fps.end(), 0) / m_fps.size();
+	float averageFPS = std::accumulate(m_fps.begin(), m_fps.end(), 0.0f) / static_cast<float>(m_fps.size());
 
 	string statString;
 	statString.Format("%.1f fps", avaragedFPS);
